@@ -34,32 +34,15 @@ if errorlevel 1 (
   echo [INFO] Commit was not created. (No changes or commit error)
 )
 
-set /p REMOTE_NAME=Remote name [origin] : 
-if "%REMOTE_NAME%"=="" set "REMOTE_NAME=origin"
-
 set "CURRENT_BRANCH="
 for /f "delims=" %%B in ('git branch --show-current') do set "CURRENT_BRANCH=%%B"
 
 if "%CURRENT_BRANCH%"=="" (
-  set /p BRANCH_NAME=Branch to push: 
-) else (
-  set /p BRANCH_NAME=Branch to push [%CURRENT_BRANCH%] : 
-)
-if "%BRANCH_NAME%"=="" set "BRANCH_NAME=%CURRENT_BRANCH%"
-
-if "%BRANCH_NAME%"=="" (
-  echo [ERROR] Branch name is required.
+  echo [ERROR] Could not detect current branch.
   exit /b 1
 )
 
-set /p USE_UPSTREAM=Use -u (set upstream)? [Y/n] : 
-if "%USE_UPSTREAM%"=="" set "USE_UPSTREAM=Y"
-
-if /I "%USE_UPSTREAM%"=="Y" (
-  git push -u "%REMOTE_NAME%" "%BRANCH_NAME%"
-) else (
-  git push "%REMOTE_NAME%" "%BRANCH_NAME%"
-)
+git push -u origin "%CURRENT_BRANCH%"
 
 if errorlevel 1 (
   echo [ERROR] git push failed.
