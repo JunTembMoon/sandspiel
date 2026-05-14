@@ -64,13 +64,13 @@ export function rgbaToSpecies(r, g, b, a) {
   let lightnessIndex = Math.floor(l * 4 - 0.25);
 
   const colorsToSpecies = [
-    [ Species.Fire, Species.Lava, Species.Rocket], // Red
-    [ Species.Wood, null, Species.Gas], // Yellow
-    [ Species.Plant, Species.Dust, Species.Acid], // Green
+    [ Species.Fire, Species.Lava, Species.Nitro], // Red
+    [ Species.Wood, Species.Metal, Species.Gas], // Yellow
+    [ Species.Plant, Species.Slime, Species.Acid], // Green
     [ Species.Plant, Species.Dust, Species.Acid ], // Green2: duplicate b/c they are perceptually close
-    [ Species.Water, Species.Ice, Species.Stone ], // Blue
+    [ Species.Water, Species.Ice, Species.Steam ], // Blue
     [ Species.Oil, Species.Seed, Species.Fungus], // Purple
-    [ Species.Cloner, Species.Mite, null ], // Violet
+    [ Species.Cloner, Species.Electricity, Species.Glass ], // Violet
   ];
 
   const species = colorsToSpecies?.[hueIndex]?.[lightnessIndex];

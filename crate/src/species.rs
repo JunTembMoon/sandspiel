@@ -34,6 +34,13 @@ pub enum Species {
     Dust = 14,
     Oil = 16,
     Rocket = 17,
+    Glass = 20,
+    MoltenGlass = 21,
+    Steam = 22,
+    Slime = 23,
+    Metal = 24,
+    Electricity = 25,
+    Nitro = 26,
 }
 
 impl Species {
@@ -61,12 +68,556 @@ impl Species {
             Species::Oil => update_oil(cell, api),
             Species::Fungus => update_fungus(cell, api),
             Species::Seed => update_seed(cell, api),
+            Species::Glass => update_glass(cell, api),
+            Species::MoltenGlass => update_molten_glass(cell, api),
+            Species::Steam => update_steam(cell, api),
+            Species::Slime => update_slime(cell, api),
+            Species::Metal => update_metal(cell, api),
+            Species::Electricity => update_electricity(cell, api),
+            Species::Nitro => update_nitro(cell, api),
             // Species::X => update_x(cell, api),
         }
     }
 }
 
+pub fn update_electricity(cell: Cell, mut api: SandApi) {
+    let mut next = cell;
+    next.ra = cell.ra.saturating_sub(20);
+    if next.ra < 20 {
+        api.set(0, 0, EMPTY_CELL);
+        return;
+    }
+
+    let (dx, dy) = api.rand_vec_8();
+    let target = api.get(dx, dy).species;
+    if target == Species::Nitro
+        || target == Species::Oil
+        || target == Species::Gas
+        || target == Species::Wood
+        || target == Species::Plant
+        || target == Species::Slime
+    {
+        api.set(
+            dx,
+            dy,
+            Cell {
+                species: Species::Fire,
+                ra: 130,
+                rb: 0,
+                clock: 0,
+            },
+        );
+    } else if target == Species::Water {
+        api.set(
+            dx,
+            dy,
+            Cell {
+                species: Species::Steam,
+                ra: 100,
+                rb: 4,
+                clock: 0,
+            },
+        );
+    }
+
+    if target == Species::Empty || target == Species::Metal || target == Species::Steam {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, dy, next);
+    } else {
+        api.set(0, 0, next);
+    }
+}
+
+pub fn update_nitro(cell: Cell, mut api: SandApi) {
+    let mut armed = cell.rb;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let n = api.get(sx, sy).species;
+            if n == Species::Fire || n == Species::Lava || n == Species::Electricity {
+                armed = 8;
+            }
+        }
+    }
+
+    if armed > 0 {
+        for sx in -1..=1 {
+            for sy in -1..=1 {
+                let fire_ra = 110 + api.rand_int(60) as u8;
+                api.set(
+                    sx,
+                    sy,
+                    Cell {
+                        species: Species::Fire,
+                        ra: fire_ra,
+                        rb: 0,
+                        clock: 0,
+                    },
+                );
+            }
+        }
+        api.set_fluid(Wind {
+            dx: 126,
+            dy: 126,
+            pressure: 180,
+            density: 30,
+        });
+        return;
+    }
+
+    let dx = api.rand_dir_2();
+    let below = api.get(0, 1);
+    if below.species == Species::Empty || below.species == Species::Oil {
+        api.set(0, 0, below);
+        api.set(0, 1, cell);
+    } else if api.get(dx, 1).species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 1, cell);
+    } else if api.get(dx, 0).species == Species::Empty && api.once_in(5) {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 0, cell);
+    } else {
+        api.set(0, 0, Cell { rb: 0, ..cell });
+    }
+}
+
+pub fn update_steam(cell: Cell, mut api: SandApi) {
+    let hot_neighbor = api.get(0, 1).species == Species::Fire
+        || api.get(0, 1).species == Species::Lava
+        || api.get(0, 1).species == Species::MoltenGlass
+        || api.get(0, -1).species == Species::Fire
+        || api.get(0, -1).species == Species::Lava
+        || api.get(0, -1).species == Species::MoltenGlass;
+
+    let mut next = cell;
+    next.ra = if hot_neighbor {
+        140 + api.rand_int(50) as u8
+    } else if api.once_in(4) {
+        cell.ra.saturating_sub(1)
+    } else {
+        cell.ra
+    };
+
+    if next.ra < 35 {
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Water,
+                ra: 110,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
+    let dx = api.rand_dir_2();
+    if api.get(0, -1).species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(0, -1, next);
+    } else if api.get(dx, -1).species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, -1, next);
+    } else if api.get(dx, 0).species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 0, next);
+    } else {
+        api.set(0, 0, next);
+    }
+}
+
+pub fn update_slime(cell: Cell, mut api: SandApi) {
+    let dx = api.rand_dir_2();
+    let below = api.get(0, 1);
+
+    if below.species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(0, 1, Cell { rb: 6, ..cell });
+        return;
+    }
+
+    if cell.rb == 0 && api.get(dx, 1).species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 1, Cell { rb: 7, ..cell });
+        return;
+    }
+
+    if cell.rb == 0 && api.once_in(7) && api.get(dx, 0).species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 0, Cell { rb: 8, ..cell });
+        return;
+    }
+
+    let hot = api.get(0, -1).species == Species::Fire
+        || api.get(0, -1).species == Species::Lava
+        || api.get(0, 1).species == Species::Fire
+        || api.get(0, 1).species == Species::Lava;
+    if hot && api.once_in(6) {
+        let gas_ra = 80 + api.rand_int(40) as u8;
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Gas,
+                ra: gas_ra,
+                rb: 3,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
+    api.set(
+        0,
+        0,
+        Cell {
+            rb: cell.rb.saturating_sub(1),
+            ..cell
+        },
+    );
+}
+
+pub fn update_metal(cell: Cell, mut api: SandApi) {
+    let mut heated = false;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let n = api.get(sx, sy).species;
+            if n == Species::Fire || n == Species::Lava || n == Species::MoltenGlass {
+                heated = true;
+                break;
+            }
+        }
+        if heated {
+            break;
+        }
+    }
+
+    let mut next = cell;
+    next.rb = if heated {
+        (cell.rb + 8).min(180)
+    } else {
+        cell.rb.saturating_sub(1)
+    };
+    next.ra = 60 + next.rb;
+
+    if next.rb > 60 {
+        for &(sx, sy) in &[(0, -1), (0, 1), (-1, 0), (1, 0)] {
+            if api.get(sx, sy).species == Species::Water {
+                let steam_ra = 90 + api.rand_int(40) as u8;
+                api.set(
+                    sx,
+                    sy,
+                    Cell {
+                        species: Species::Steam,
+                        ra: steam_ra,
+                        rb: 5,
+                        clock: 0,
+                    },
+                );
+                next.rb = next.rb.saturating_sub(20);
+                next.ra = 60 + next.rb;
+                break;
+            }
+        }
+    }
+
+    api.set(0, 0, next);
+}
+
+pub fn update_glass(cell: Cell, mut api: SandApi) {
+    let mut heated = false;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let neighbor = api.get(sx, sy).species;
+            if neighbor == Species::Fire || neighbor == Species::Lava {
+                heated = true;
+                break;
+            }
+        }
+        if heated {
+            break;
+        }
+    }
+
+    if heated && api.once_in(4) {
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::MoltenGlass,
+                ra: 160,
+                rb: 3,
+                clock: 0,
+            },
+        );
+    }
+}
+
+pub fn update_molten_glass(cell: Cell, mut api: SandApi) {
+    let mut heated = false;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let neighbor = api.get(sx, sy).species;
+            if neighbor == Species::Fire || neighbor == Species::Lava {
+                heated = true;
+                break;
+            }
+        }
+        if heated {
+            break;
+        }
+    }
+
+    // Water cools molten glass and a small amount of water flashes off.
+    let water_below = api.get(0, 1).species == Species::Water;
+    let water_above = api.get(0, -1).species == Species::Water;
+    let water_left = api.get(-1, 0).species == Species::Water;
+    let water_right = api.get(1, 0).species == Species::Water;
+    if water_below || water_above || water_left || water_right {
+        let mut smoke_dx = 0;
+        let mut smoke_dy = -1;
+
+        if water_below {
+            api.set(0, 1, EMPTY_CELL);
+            smoke_dx = 0;
+            smoke_dy = 1;
+        } else if water_above {
+            api.set(0, -1, EMPTY_CELL);
+            smoke_dx = 0;
+            smoke_dy = -1;
+        } else if water_left {
+            api.set(-1, 0, EMPTY_CELL);
+            smoke_dx = -1;
+            smoke_dy = 0;
+        } else if water_right {
+            api.set(1, 0, EMPTY_CELL);
+            smoke_dx = 1;
+            smoke_dy = 0;
+        }
+
+        let steam_ra = 35 + api.rand_int(30) as u8;
+        if api.get(smoke_dx, smoke_dy).species == Species::Empty {
+            api.set(
+                smoke_dx,
+                smoke_dy,
+                Cell {
+                    species: Species::Gas,
+                    ra: steam_ra,
+                    rb: 4,
+                    clock: 0,
+                },
+            );
+        } else if api.get(0, -1).species == Species::Empty {
+            api.set(
+                0,
+                -1,
+                Cell {
+                    species: Species::Gas,
+                    ra: steam_ra,
+                    rb: 4,
+                    clock: 0,
+                },
+            );
+        }
+
+        api.set_fluid(Wind {
+            dx: 0,
+            dy: 24,
+            pressure: 28,
+            density: 16,
+        });
+
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Glass,
+                ra: 120,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
+    let mut cooled = cell;
+    cooled.ra = if heated {
+        165 + api.rand_int(55) as u8
+    } else if api.once_in(8) {
+        cell.ra.saturating_sub(1)
+    } else {
+        cell.ra
+    };
+
+    // Very hot molten glass can ignite nearby flammables.
+    if cooled.ra > 120 && api.once_in(5) {
+        let (ix, iy) = api.rand_vec_8();
+        let target = api.get(ix, iy).species;
+        if target == Species::Gas
+            || target == Species::Oil
+            || target == Species::Wood
+            || target == Species::Plant
+            || target == Species::Fungus
+            || target == Species::Seed
+            || target == Species::Dust
+        {
+            let fire_ra = 80 + api.rand_int(70) as u8;
+            api.set(
+                ix,
+                iy,
+                Cell {
+                    species: Species::Fire,
+                    ra: fire_ra,
+                    rb: 0,
+                    clock: 0,
+                },
+            );
+        }
+    }
+
+    if !heated && cooled.ra < 25 {
+        let smoke_ra = 25 + api.rand_int(20) as u8;
+        if api.get(0, -1).species == Species::Empty {
+            api.set(
+                0,
+                -1,
+                Cell {
+                    species: Species::Gas,
+                    ra: smoke_ra,
+                    rb: 3,
+                    clock: 0,
+                },
+            );
+        } else if api.get(-1, -1).species == Species::Empty {
+            api.set(
+                -1,
+                -1,
+                Cell {
+                    species: Species::Gas,
+                    ra: smoke_ra,
+                    rb: 3,
+                    clock: 0,
+                },
+            );
+        } else if api.get(1, -1).species == Species::Empty {
+            api.set(
+                1,
+                -1,
+                Cell {
+                    species: Species::Gas,
+                    ra: smoke_ra,
+                    rb: 3,
+                    clock: 0,
+                },
+            );
+        }
+
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Glass,
+                ra: 110,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
+    let dx = api.rand_dir_2();
+    let rb = cell.rb;
+    let above_species = api.get(0, -1).species;
+    let anchored_column = above_species == Species::MoltenGlass || above_species == Species::Glass;
+
+    if rb > 0 {
+        api.set(
+            0,
+            0,
+            Cell {
+                rb: rb.saturating_sub(1),
+                ..cooled
+            },
+        );
+        return;
+    }
+
+    let can_fall = api.get(0, 1).species == Species::Empty;
+    if can_fall {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(0, 1, Cell { rb: 10, ..cooled });
+        return;
+    }
+
+    let can_slide_diag = api.get(dx, 1).species == Species::Empty;
+    if can_slide_diag && !anchored_column && api.once_in(10) {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 1, Cell { rb: 14, ..cooled });
+        return;
+    }
+
+    let can_slide_side = api.get(dx, 0).species == Species::Empty;
+    if can_slide_side && !anchored_column && api.once_in(20) {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 0, Cell { rb: 18, ..cooled });
+        return;
+    }
+
+    api.set(
+        0,
+        0,
+        Cell {
+            rb: 4,
+            ..cooled
+        },
+    );
+}
+
 pub fn update_sand(cell: Cell, mut api: SandApi) {
+    let mut heated = false;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let neighbor = api.get(sx, sy).species;
+            if neighbor == Species::Fire || neighbor == Species::Lava {
+                heated = true;
+                break;
+            }
+        }
+        if heated {
+            break;
+        }
+    }
+
+    if heated && api.once_in(4) {
+        let glass_ra = 120 + api.rand_int(70) as u8;
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Glass,
+                ra: glass_ra,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
     let dx = api.rand_dir_2();
 
     let nbr = api.get(0, 1);
@@ -165,6 +716,38 @@ pub fn update_stone(cell: Cell, mut api: SandApi) {
 }
 
 pub fn update_water(cell: Cell, mut api: SandApi) {
+    let mut boiling = false;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let n = api.get(sx, sy).species;
+            if n == Species::Fire || n == Species::Lava || n == Species::MoltenGlass || n == Species::Metal {
+                boiling = true;
+                break;
+            }
+        }
+        if boiling {
+            break;
+        }
+    }
+
+    if boiling && api.once_in(8) {
+        let steam_ra = 120 + api.rand_int(40) as u8;
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Steam,
+                ra: steam_ra,
+                rb: 5,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
     let mut dx = api.rand_dir();
     let below = api.get(0, 1);
     let dx1 = api.get(dx, 1);
@@ -368,6 +951,70 @@ pub fn update_oil(cell: Cell, mut api: SandApi) {
 }
 
 pub fn update_gas(cell: Cell, mut api: SandApi) {
+    if api.universe.gas_overload {
+        let ignition_ra = 120 + api.rand_int(80) as u8;
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Fire,
+                ra: ignition_ra,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        api.set_fluid(Wind {
+            dx: 0,
+            dy: 0,
+            pressure: 120,
+            density: 40,
+        });
+        return;
+    }
+
+    // Ignite when gas is packed in a sealed local chamber.
+    let mut inner_gas = 0;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if api.get(sx, sy).species == Species::Gas {
+                inner_gas += 1;
+            }
+        }
+    }
+
+    let mut shell_blocked = 0;
+    for sx in -2..=2 {
+        for sy in -2..=2 {
+            if sx == -2 || sx == 2 || sy == -2 || sy == 2 {
+                let species = api.get(sx, sy).species;
+                if species != Species::Empty && species != Species::Gas && species != Species::Fire {
+                    shell_blocked += 1;
+                }
+            }
+        }
+    }
+
+    if inner_gas >= 8 && shell_blocked >= 12 {
+        let ignition_ra = 95 + api.rand_int(65) as u8;
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Fire,
+                ra: ignition_ra,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        api.set_fluid(Wind {
+            dx: 0,
+            dy: 0,
+            pressure: 100,
+            density: 35,
+        });
+        return;
+    }
+
     let (dx, dy) = api.rand_vec();
 
     let nbr = api.get(dx, dy);
@@ -591,7 +1238,7 @@ pub fn update_rocket(cell: Cell, mut api: SandApi) {
 pub fn update_fire(cell: Cell, mut api: SandApi) {
     let ra = cell.ra;
     let mut degraded = cell.clone();
-    degraded.ra = ra - (2 + api.rand_dir()) as u8;
+    degraded.ra = ra.saturating_sub((2 + api.rand_dir()) as u8);
 
     let (dx, dy) = api.rand_vec();
 
@@ -1176,7 +1823,7 @@ pub fn update_acid(cell: Cell, mut api: SandApi) {
 
     let ra = cell.ra;
     let mut degraded = cell.clone();
-    degraded.ra = ra - 60;
+    degraded.ra = ra.saturating_sub(60);
     // i = api.rand_int(100);
     if degraded.ra < 80 {
         degraded = EMPTY_CELL;

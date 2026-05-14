@@ -65,6 +65,7 @@ pub struct Universe {
     winds: Vec<Wind>,
     burns: Vec<Wind>,
     generation: u8,
+    gas_overload: bool,
     rng: SplitMix64,
 }
 
@@ -178,6 +179,13 @@ impl Universe {
         }
     }
     pub fn tick(&mut self) {
+        let gas_count = self
+            .cells
+            .iter()
+            .filter(|cell| cell.species == Species::Gas)
+            .count();
+        self.gas_overload = gas_count >= 52_500;
+
         // let mut next = self.cells.clone();
         // let dx = self.winds[(self.width * self.height / 2) as usize].dx;
         // let js: JsValue = (dx).into();
@@ -328,6 +336,7 @@ impl Universe {
             burns,
             winds,
             generation: 0,
+            gas_overload: false,
             rng,
         }
     }
@@ -350,7 +359,7 @@ impl Universe {
     }
 
     fn blow_wind(cell: Cell, wind: Wind, mut api: SandApi) {
-        if cell.clock - api.universe.generation == 1 {
+        if cell.clock.wrapping_sub(api.universe.generation) == 1 {
             return;
         }
         if cell.species == Species::Empty {
@@ -366,14 +375,20 @@ impl Universe {
 
             Species::Stone => 70,
             Species::Wood => 70,
+            Species::Glass => 70,
+            Species::MoltenGlass => 55,
+            Species::Metal => 90,
 
             Species::Plant => 60,
             Species::Lava => 60,
             Species::Ice => 60,
+            Species::Slime => 55,
 
             Species::Fungus => 54,
 
             Species::Oil => 50,
+            Species::Steam => 8,
+            Species::Nitro => 35,
 
             // Intentionally left out and covered by the default case
             // Species::Water => 40,
@@ -387,6 +402,7 @@ impl Universe {
             Species::Dust => 10,
             Species::Fire => 5,
             Species::Gas => 5,
+            Species::Electricity => 1,
             /*
              Some hacked species values exist outside of the enum values.
              Making sure the default case is emitted allows "BELP" to have a defined wind threshold.
@@ -431,7 +447,7 @@ impl Universe {
         }
     }
     fn update_cell(cell: Cell, api: SandApi) {
-        if cell.clock - api.universe.generation == 1 {
+        if cell.clock.wrapping_sub(api.universe.generation) == 1 {
             return;
         }
 

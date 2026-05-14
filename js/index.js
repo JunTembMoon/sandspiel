@@ -18,7 +18,8 @@ if (!window.location.host.startsWith("localhost")) {
 }
 
 import "./api";
-import { Universe } from "../crate/pkg";
+import * as wasm from "../crate/pkg/sandtable_bg.wasm";
+import { Species, Universe } from "../crate/pkg";
 
 import { startWebGL } from "./render";
 import { fps } from "./fps";
@@ -58,26 +59,36 @@ if (mobileAndTabletcheck()) {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/service-worker.js")
-      .then((registration) => {
-        console.log("SW registered: ", registration);
-        fetch("index.html"); // refresh cache (?)
-      })
-      .catch((registrationError) => {
-        console.log("SW registration failed: ", registrationError);
-      });
-  });
+  if (window.location.host.startsWith("localhost")) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => registration.unregister());
+    });
+  } else {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("/service-worker.js")
+        .then((registration) => {
+          console.log("SW registered: ", registration);
+          fetch("index.html"); // refresh cache (?)
+        })
+        .catch((registrationError) => {
+          console.log("SW registration failed: ", registrationError);
+        });
+    });
+  }
 }
 
 let n = 300;
+window.maxFps = Number(localStorage.getItem("maxFps") || 60);
+window.appLanguage = localStorage.getItem("language") || "en";
 const universe = isBench ? window.u : Universe.new(n, n);
 
 let width = n;
 let height = n;
+const memory = wasm.memory;
 const canvas = document.getElementById("sand-canvas");
 const canvas2 = document.getElementById("fluid-canvas");
+const gasMeter = document.getElementById("gas-meter");
 
 canvas.height = n * Math.ceil(window.devicePixelRatio);
 canvas.width = n * Math.ceil(window.devicePixelRatio);
@@ -99,7 +110,193 @@ if (!isBench) {
   fluid = window.f;
   drawSand = window.r;
 }
-const renderLoop = () => {
+
+let pendingPaintOps = [];
+
+function queuePaint(x, y, size, species) {
+  if (!Number.isFinite(species)) {
+    return;
+  }
+  pendingPaintOps.push([x, y, size, species]);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function randomInt(max) {
+  return Math.floor(Math.random() * max);
+}
+
+function flushPaintOps() {
+  if (pendingPaintOps.length === 0) {
+    return;
+  }
+
+  const ops = pendingPaintOps;
+  pendingPaintOps = [];
+  for (let i = 0; i < ops.length; i++) {
+    const [x, y, size, species] = ops[i];
+    universe.paint(x, y, size, species);
+  }
+}
+
+let lastGasHudUpdate = 0;
+function updateGasMeter() {
+  if (!gasMeter) {
+    return;
+  }
+  const ui = window.UI;
+  if (!ui || !ui.state || ui.state.selectedElement !== Species.Gas) {
+    gasMeter.style.display = "none";
+    return;
+  }
+
+  const now = performance.now();
+  if (now - lastGasHudUpdate < 120) {
+    return;
+  }
+  lastGasHudUpdate = now;
+
+  const cellsData = new Uint8Array(memory.buffer, universe.cells(), width * height * 4);
+  let gasCount = 0;
+  for (let i = 0; i < width * height * 4; i += 4) {
+    if (cellsData[i] === Species.Gas) {
+      gasCount++;
+    }
+  }
+
+  gasMeter.textContent = `Gas: ${gasCount}`;
+  gasMeter.style.display = "block";
+}
+
+let disasterFrame = 0;
+let lastRenderTime = 0;
+function paintLightningBolt(x) {
+  let boltX = x;
+  for (let y = 0; y < height; y += 8) {
+    boltX = clamp(boltX + randomInt(3) - 1, 2, width - 3);
+    queuePaint(boltX, y, 4, Species.Electricity);
+  }
+  queuePaint(boltX, height - 8, 8, Species.Fire);
+}
+
+function applyTyphoonWinds() {
+  const winds = new Uint8Array(memory.buffer, universe.winds(), width * height * 4);
+  const centerX = width * 0.68 + Math.sin(disasterFrame * 0.035) * 42;
+  const centerY = height * 0.38 + Math.cos(disasterFrame * 0.021) * 18;
+  const maxRadius = width * 0.42;
+
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      const i = (x * height + y) * 4;
+      const relX = x - centerX;
+      const relY = y - centerY;
+      const dist = Math.max(Math.sqrt(relX * relX + relY * relY), 1);
+      const falloff = Math.max(0, 1 - dist / maxRadius);
+      const ring = Math.max(0, 1 - dist / (maxRadius * 0.55));
+
+      const tangentX = -relY / dist;
+      const tangentY = relX / dist;
+      const inwardX = -relX / dist;
+      const inwardY = -relY / dist;
+
+      const swirl = 62 * falloff + 54 * ring;
+      const pull = 18 * falloff + 46 * ring;
+      const updraft = 34 * ring;
+
+      const windX = tangentX * swirl + inwardX * pull;
+      const windY = tangentY * swirl + inwardY * pull - updraft;
+
+      winds[i] = clamp(Math.round(126 + windY), 0, 255);
+      winds[i + 1] = clamp(Math.round(126 + windX), 0, 255);
+      winds[i + 2] = clamp(Math.round(40 + 150 * ring), 0, 255);
+      winds[i + 3] = clamp(Math.round(18 + 48 * falloff), 0, 255);
+    }
+  }
+
+  return centerX;
+}
+
+function applyActiveDisaster() {
+  const ui = window.UI;
+  if (!ui || !ui.state) {
+    return;
+  }
+
+  const { activeDisaster } = ui.state;
+  if (!activeDisaster || activeDisaster === "none") {
+    return;
+  }
+
+  disasterFrame++;
+  if (activeDisaster === "rain") {
+    if (disasterFrame % 3 === 0) {
+      queuePaint(randomInt(width), 2, 1, Species.Water);
+    }
+  } else if (activeDisaster === "lightning") {
+    for (let i = 0; i < 3; i++) {
+      queuePaint(randomInt(width), 2, 3, Species.Water);
+    }
+    if (disasterFrame % 16 === 0) {
+      paintLightningBolt(randomInt(width));
+    }
+  } else if (activeDisaster === "typhoon") {
+    const vortexX = applyTyphoonWinds();
+    for (let i = 0; i < 4; i++) {
+      const x = clamp(Math.round(vortexX + randomInt(90) - 45), 2, width - 3);
+      queuePaint(x, 2 + randomInt(10), 2, Species.Water);
+    }
+    if (disasterFrame % 22 === 0) {
+      paintLightningBolt(clamp(Math.round(vortexX + randomInt(50) - 25), 10, width - 10));
+    }
+  } else if (activeDisaster === "earthquake") {
+    if (disasterFrame % 12 === 0) {
+      const crackX = 30 + randomInt(width - 60);
+      for (let y = height - 4; y > height - 80; y -= 6) {
+        queuePaint(clamp(crackX + randomInt(9) - 4, 2, width - 3), y, 5, Species.Empty);
+        if (randomInt(3) === 0) {
+          queuePaint(clamp(crackX + randomInt(9) - 4, 2, width - 3), y, 4, Species.Lava);
+        }
+      }
+    }
+  } else if (activeDisaster === "meteor") {
+    if (disasterFrame % 10 === 0) {
+      let meteorX = randomInt(width);
+      const burstY = 70 + randomInt(70);
+      for (let step = 0; step < 16; step++) {
+        const y = step * 6;
+        if (y >= burstY) {
+          break;
+        }
+        queuePaint(clamp(meteorX - step, 2, width - 3), y, 4, Species.Fire);
+      }
+      for (let i = 0; i < 8; i++) {
+        queuePaint(
+          clamp(meteorX + randomInt(25) - 12, 2, width - 3),
+          clamp(burstY + randomInt(25) - 12, 2, height - 40),
+          5,
+          i % 3 === 0 ? Species.Dust : Species.Fire
+        );
+      }
+    }
+  }
+}
+
+const renderLoop = (timestamp = performance.now()) => {
+  const maxFps = Number(window.maxFps || 0);
+  if (maxFps > 0) {
+    const minFrameTime = 1000 / maxFps;
+    if (timestamp - lastRenderTime < minFrameTime) {
+      window.animationId = requestAnimationFrame(renderLoop);
+      return;
+    }
+  }
+  lastRenderTime = timestamp;
+
+  applyActiveDisaster();
+  flushPaintOps();
+  updateGasMeter();
   if (!window.paused) {
     fps.render(); // new
     universe.tick();
@@ -125,6 +322,26 @@ function reset() {
   universe.reset();
 }
 
+function safePushUndo() {
+  try {
+    universe.push_undo();
+  } catch (err) {
+    const msg = String((err && err.message) || err || "");
+    if (msg.includes("recursive use of an object")) {
+      // Retry outside the current wasm callback to avoid re-entrant mutable borrow.
+      setTimeout(() => {
+        try {
+          universe.push_undo();
+        } catch (_retryErr) {
+          // Ignore repeated undo snapshot failures.
+        }
+      }, 0);
+      return;
+    }
+    throw err;
+  }
+}
+
 document.addEventListener("keydown", function (event) {
   if ((event.ctrlKey || event.metaKey) && event.key === "z") {
     reset();
@@ -141,4 +358,4 @@ document.addEventListener("paste", function (event) {
 });
 
 (adsbygoogle = window.adsbygoogle || []).push({});
-export { canvas, width, height, universe, reset };
+export { canvas, width, height, universe, reset, safePushUndo, queuePaint };

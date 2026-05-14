@@ -129,6 +129,36 @@ void main() {
     hue = fract(fract(data.b * 2.) * 0.5) - 0.3;
     saturation = 0.7 * (data.g + 0.4) + data.b * 0.2;
     lightness = 0.9 * (data.g + 0.9);
+  } else if (type == 20) { // glass
+    hue = 0.56;
+    saturation = 0.12 + data.g * 0.12;
+    lightness = 0.78 + data.g * 0.18;
+    a = 0.82;
+  } else if (type == 21) { // molten glass
+    hue = 0.02 + data.g * 0.04;
+    saturation = 0.86;
+    lightness = 0.62 + data.g * 0.32 + noise * 0.08;
+  } else if (type == 22) { // steam
+    hue = 0.56;
+    saturation = 0.05;
+    lightness = 0.82 + data.g * 0.12 + noise * 0.04;
+    a = 0.45;
+  } else if (type == 23) { // slime
+    hue = 0.31;
+    saturation = 0.72;
+    lightness = 0.42 + data.g * 0.2;
+  } else if (type == 24) { // metal
+    hue = 0.03 * data.b;
+    saturation = 0.04 + data.b * 0.5;
+    lightness = 0.45 + data.g * 0.15 + data.b * 0.12;
+  } else if (type == 25) { // electricity
+    hue = 0.16 + noise * 0.02;
+    saturation = 0.92;
+    lightness = 0.92 + noise * 0.08;
+  } else if (type == 26) { // nitro
+    hue = 0.94;
+    saturation = 0.55;
+    lightness = 0.48 + data.g * 0.18;
   }
   if (isSnapshot == false) {
     lightness *= (0.975 + snoise2(floor(uv * resolution / dpi)) * 0.025);

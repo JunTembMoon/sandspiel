@@ -78,8 +78,12 @@ button {
   flex-grow: 1;
   max-width: 150px;
   fill: black;
-  line-height: 0px;
+  line-height: 1.1;
   cursor: pointer;
+}
+
+button svg {
+  vertical-align: middle;
 }
 .active button,
 button.active {
@@ -115,6 +119,32 @@ button.selected {
   display: flex;
   flex-wrap: wrap;
   float: right;
+  max-width: min(460px, 92vw);
+  justify-content: flex-end;
+}
+
+.tool-section {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.tool-section-title {
+  width: 100%;
+  text-align: right;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #555;
+  padding: 2px 4px;
+}
+
+.disaster-section {
+  margin-top: 8px;
+  border-top: 1px dashed #aaa;
+  padding-top: 4px;
 }
 
 #fps {
@@ -131,6 +161,21 @@ button.selected {
   white-space: pre;
   /* font-family: monospace; */
   user-select: none;
+}
+
+#gas-meter {
+  pointer-events: none;
+  z-index: 3;
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 4px 6px;
+  background-color: rgba(255, 255, 255, 0.55);
+  color: black;
+  text-align: left;
+  white-space: pre;
+  user-select: none;
+  display: none;
 }
 
 #controls {
@@ -193,6 +238,29 @@ input {
   border-color: gainsboro;
   flex-grow: 1;
   fill: black;
+}
+select {
+  position: relative;
+  height: 29px;
+  min-width: 120px;
+  font-size: 16px;
+  padding: 1px 5px;
+  background-color: whitesmoke;
+  color: black;
+  border: 1.6px solid gainsboro;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 img {
 }

@@ -1,4 +1,4 @@
-import { height, universe, width } from "./index.js";
+import { height, queuePaint, safePushUndo, width } from "./index.js";
 import { sizeMap } from "./components/ui";
 const canvas = document.getElementById("sand-canvas");
 
@@ -33,7 +33,7 @@ let repeat = null;
 
 canvas.addEventListener("mousedown", (event) => {
   event.preventDefault();
-  universe.push_undo();
+  safePushUndo();
   painting = true;
   clearInterval(repeat);
   repeat = window.setInterval(() => paint(event), 100);
@@ -61,7 +61,7 @@ canvas.addEventListener("mouseleave", (event) => {
 });
 
 canvas.addEventListener("touchstart", (event) => {
-  universe.push_undo();
+  safePushUndo();
   if (event.cancelable) {
     event.preventDefault();
   }
@@ -144,7 +144,7 @@ const paint = (event) => {
   const x = Math.min(Math.floor(canvasLeft), width - 1);
   const y = Math.min(Math.floor(canvasTop), height - 1);
   if (window.UI.state.selectedElement < 0) return;
-  universe.paint(
+  queuePaint(
     x,
     y,
     sizeMap[window.UI.state.size],
