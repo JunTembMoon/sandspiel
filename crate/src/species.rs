@@ -41,6 +41,9 @@ pub enum Species {
     Metal = 24,
     Electricity = 25,
     Nitro = 26,
+    WetSand = 27,
+    SaltWater = 28,
+    Salt = 29,
 }
 
 impl Species {
@@ -49,6 +52,9 @@ impl Species {
             Species::Empty => {}
             Species::Wall => {}
             Species::Sand => update_sand(cell, api),
+            Species::WetSand => update_wet_sand(cell, api),
+            Species::SaltWater => update_salt_water(cell, api),
+            Species::Salt => update_salt(cell, api),
             Species::Dust => update_dust(cell, api),
             Species::Water => update_water(cell, api),
             Species::Stone => update_stone(cell, api),
@@ -618,6 +624,37 @@ pub fn update_sand(cell: Cell, mut api: SandApi) {
         return;
     }
 
+    for &(sx, sy) in &[(0, 1), (0, -1), (-1, 0), (1, 0)] {
+        let neighbor = api.get(sx, sy);
+        if neighbor.species == Species::Water {
+            api.set(sx, sy, EMPTY_CELL);
+            api.set(
+                0,
+                0,
+                Cell {
+                    species: Species::WetSand,
+                    ra: cell.ra.saturating_sub(24),
+                    rb: 4,
+                    clock: 0,
+                },
+            );
+            return;
+        }
+        if neighbor.species == Species::SaltWater && api.once_in(6) {
+            api.set(
+                0,
+                0,
+                Cell {
+                    species: Species::WetSand,
+                    ra: cell.ra.saturating_sub(10),
+                    rb: 1,
+                    clock: 0,
+                },
+            );
+            return;
+        }
+    }
+
     let dx = api.rand_dir_2();
 
     let nbr = api.get(0, 1);
@@ -637,6 +674,203 @@ pub fn update_sand(cell: Cell, mut api: SandApi) {
     } else {
         api.set(0, 0, cell);
     }
+}
+
+pub fn update_wet_sand(cell: Cell, mut api: SandApi) {
+    let mut heated = false;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let neighbor = api.get(sx, sy).species;
+            if neighbor == Species::Fire || neighbor == Species::Lava {
+                heated = true;
+                break;
+            }
+        }
+        if heated {
+            break;
+        }
+    }
+
+    if heated && api.once_in(4) {
+        let glass_ra = 120 + api.rand_int(70) as u8;
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Glass,
+                ra: glass_ra,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
+    for &(sx, sy) in &[(0, 1), (0, -1), (-1, 0), (1, 0)] {
+        let neighbor = api.get(sx, sy).species;
+        if neighbor == Species::Water {
+            api.set(
+                0,
+                0,
+                Cell {
+                    rb: (cell.rb + 1).min(10),
+                    ra: cell.ra.saturating_sub(1),
+                    ..cell
+                },
+            );
+            return;
+        }
+        if neighbor == Species::SaltWater {
+            api.set(
+                0,
+                0,
+                Cell {
+                    rb: (cell.rb + 1).min(8),
+                    ra: cell.ra.saturating_sub(1),
+                    ..cell
+                },
+            );
+            return;
+        }
+    }
+
+    let dx = api.rand_dir_2();
+    let below = api.get(0, 1);
+    if below.species == Species::Sand {
+        api.set(
+            0,
+            1,
+            Cell {
+                species: Species::WetSand,
+                ra: below.ra.saturating_sub(22),
+                rb: (cell.rb + 2).min(10),
+                clock: 0,
+            },
+        );
+        api.set(
+            0,
+            0,
+            Cell {
+                rb: cell.rb.saturating_sub(1),
+                ..cell
+            },
+        );
+        return;
+    }
+    if below.species == Species::WetSand && below.rb < 9 && cell.rb > 0 && api.once_in(2) {
+        api.set(
+            0,
+            1,
+            Cell {
+                rb: (below.rb + 1).min(10),
+                ..below
+            },
+        );
+        api.set(
+            0,
+            0,
+            Cell {
+                rb: cell.rb.saturating_sub(1),
+                ..cell
+            },
+        );
+        return;
+    }
+
+    let fluid_below = below.species == Species::Water
+        || below.species == Species::SaltWater
+        || below.species == Species::Gas
+        || below.species == Species::Oil
+        || below.species == Species::Acid;
+
+    if below.species == Species::Empty || fluid_below {
+        api.set(0, 0, if fluid_below { below } else { EMPTY_CELL });
+        api.set(
+            0,
+            1,
+            Cell {
+                rb: (cell.rb + 2).min(10),
+                ..cell
+            },
+        );
+        return;
+    }
+
+    if cell.rb >= 6 {
+        let crack_left = api.get(-1, 1).species == Species::Empty;
+        let crack_right = api.get(1, 1).species == Species::Empty;
+        let cracked = Cell {
+            species: Species::Sand,
+            ra: cell.ra.saturating_sub(8),
+            rb: 0,
+            clock: 0,
+        };
+
+        if crack_left || crack_right {
+            let crack_dx = if crack_left && crack_right {
+                dx
+            } else if crack_left {
+                -1
+            } else {
+                1
+            };
+            api.set(0, 0, EMPTY_CELL);
+            api.set(crack_dx, 1, cracked);
+        } else {
+            api.set(0, 0, cracked);
+        }
+        return;
+    }
+
+    let diag = api.get(dx, 1);
+    if cell.rb <= 1
+        && (diag.species == Species::Empty
+            || diag.species == Species::Water
+            || diag.species == Species::SaltWater
+            || diag.species == Species::Oil)
+    {
+        api.set(0, 0, if diag.species == Species::Empty { EMPTY_CELL } else { diag });
+        api.set(
+            dx,
+            1,
+            Cell {
+                rb: (cell.rb + 1).min(10),
+                ..cell
+            },
+        );
+        return;
+    }
+
+    if cell.rb == 0 && api.once_in(900) {
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Sand,
+                ra: cell.ra.saturating_add(6),
+                rb: 0,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
+    let should_dry = api.once_in(10);
+    api.set(
+        0,
+        0,
+        Cell {
+            rb: if should_dry {
+                cell.rb.saturating_sub(1)
+            } else {
+                cell.rb
+            },
+            ..cell
+        },
+    );
 }
 
 pub fn update_dust(cell: Cell, mut api: SandApi) {
@@ -746,6 +980,54 @@ pub fn update_water(cell: Cell, mut api: SandApi) {
             },
         );
         return;
+    }
+
+    let below = api.get(0, 1);
+    if below.species == Species::Sand {
+        api.set(
+            0,
+            1,
+            Cell {
+                species: Species::WetSand,
+                ra: below.ra.saturating_sub(24),
+                rb: 6,
+                clock: 0,
+            },
+        );
+        api.set(0, 0, EMPTY_CELL);
+        return;
+    }
+    if below.species == Species::WetSand && below.rb < 9 {
+        api.set(
+            0,
+            1,
+            Cell {
+                rb: (below.rb + 2).min(10),
+                ..below
+            },
+        );
+        api.set(0, 0, EMPTY_CELL);
+        return;
+    }
+
+    for &(sx, sy) in &[(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)] {
+        let neighbor = api.get(sx, sy);
+        if neighbor.species == Species::Sand {
+            api.set(
+                sx,
+                sy,
+                Cell {
+                    species: Species::WetSand,
+                    ra: neighbor.ra.saturating_sub(20),
+                    rb: 4,
+                    clock: 0,
+                },
+            );
+            if api.once_in(3) {
+                api.set(0, 0, EMPTY_CELL);
+            }
+            return;
+        }
     }
 
     let mut dx = api.rand_dir();
@@ -862,6 +1144,148 @@ pub fn update_water(cell: Cell, mut api: SandApi) {
     //     api.set(0, 0, EMPTY_CELL);
     //     api.set(-dx, 0, cell);
     // }
+}
+
+pub fn update_salt_water(cell: Cell, mut api: SandApi) {
+    let mut burning = false;
+    for sx in -1..=1 {
+        for sy in -1..=1 {
+            if sx == 0 && sy == 0 {
+                continue;
+            }
+            let n = api.get(sx, sy).species;
+            if n == Species::Fire || n == Species::Lava || n == Species::MoltenGlass {
+                burning = true;
+                break;
+            }
+        }
+        if burning {
+            break;
+        }
+    }
+
+    if burning && api.once_in(4) {
+        if api.get(0, -1).species == Species::Empty {
+            let steam_ra = 100 + api.rand_int(30) as u8;
+            api.set(
+                0,
+                -1,
+                Cell {
+                    species: Species::Steam,
+                    ra: steam_ra,
+                    rb: 4,
+                    clock: 0,
+                },
+            );
+        }
+        api.set(
+            0,
+            0,
+            Cell {
+                species: Species::Salt,
+                ra: 150,
+                rb: 0,
+                clock: 0,
+            },
+        );
+        return;
+    }
+
+    for &(sx, sy) in &[(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)] {
+        let neighbor = api.get(sx, sy);
+        if neighbor.species == Species::Sand && api.once_in(14) {
+            api.set(
+                sx,
+                sy,
+                Cell {
+                    species: Species::WetSand,
+                    ra: neighbor.ra.saturating_sub(8),
+                    rb: 1,
+                    clock: 0,
+                },
+            );
+            break;
+        }
+    }
+
+    let mut dx = api.rand_dir();
+    let below = api.get(0, 1);
+    let dx1 = api.get(dx, 1);
+    if below.species == Species::Empty || below.species == Species::Oil {
+        api.set(0, 0, below);
+        api.set(0, 1, Cell { rb: cell.rb.saturating_add(1), ..cell });
+        return;
+    } else if dx1.species == Species::Empty || dx1.species == Species::Oil {
+        api.set(0, 0, dx1);
+        api.set(dx, 1, cell);
+        return;
+    } else if api.get(-dx, 1).species == Species::Empty && api.once_in(2) {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(-dx, 1, cell);
+        return;
+    }
+
+    let left = cell.ra % 2 == 0;
+    dx = if left { 1 } else { -1 };
+    let side = api.get(dx, 0);
+    if side.species == Species::Empty && api.once_in(3) {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 0, cell);
+        return;
+    }
+
+    api.set(0, 0, Cell { rb: cell.rb.saturating_sub(1), ..cell });
+}
+
+pub fn update_salt(cell: Cell, mut api: SandApi) {
+    for &(sx, sy) in &[(0, -1), (-1, 0), (1, 0)] {
+        let neighbor = api.get(sx, sy);
+        if neighbor.species == Species::Water {
+            api.set(
+                sx,
+                sy,
+                Cell {
+                    species: Species::SaltWater,
+                    ra: neighbor.ra,
+                    rb: 4,
+                    clock: 0,
+                },
+            );
+            if api.once_in(2) {
+                api.set(0, 0, EMPTY_CELL);
+                return;
+            }
+        }
+    }
+
+    let dx = api.rand_dir_2();
+    let below = api.get(0, 1);
+    if below.species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(0, 1, cell);
+        return;
+    }
+    if below.species == Species::Water {
+        api.set(
+            0,
+            1,
+            Cell {
+                species: Species::SaltWater,
+                ra: below.ra,
+                rb: 4,
+                clock: 0,
+            },
+        );
+        api.set(0, 0, EMPTY_CELL);
+        return;
+    }
+    if api.get(dx, 1).species == Species::Empty {
+        api.set(0, 0, EMPTY_CELL);
+        api.set(dx, 1, cell);
+        return;
+    }
+
+    api.set(0, 0, cell);
 }
 
 pub fn update_oil(cell: Cell, mut api: SandApi) {

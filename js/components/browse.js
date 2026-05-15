@@ -6,6 +6,7 @@ import timeago from "timeago.js";
 import { functions } from "../api.js";
 import SignInScreen from "./signin.js";
 import { Post } from "./Post";
+import { BROWSE_TEXT, getLanguage, getText } from "../i18n";
 
 export const ago = timeago();
 
@@ -23,12 +24,13 @@ class Submissions extends React.Component {
   }
   render() {
     let { submissions, voteFromBrowse, browseVotes, report } = this.props;
+    const text = getText(BROWSE_TEXT);
 
     if (!submissions) {
-      return <div style={{ height: "90vh" }}>Loading Submissions...</div>;
+      return <div style={{ height: "90vh" }}>{text.loading}</div>;
     }
     if (submissions.length == 0) {
-      return <div style={{ height: "90vh" }}>Didn't find anything!</div>;
+      return <div style={{ height: "90vh" }}>{text.empty}</div>;
     }
 
     return (
@@ -184,14 +186,16 @@ class Browse extends React.Component {
   }
   render() {
     const { search, submissions, browseVotes } = this.state;
+    const language = getLanguage();
+    const text = getText(BROWSE_TEXT, language);
     return (
       <React.Fragment>
         <SignInScreen />
         <p style={{ gridColumn: "auto / span 2", margin: "8px", fontSize: 16 }}>
-          Check out ☞<br></br>
+          {text.discover} ☞<br></br>
           <a href="https://studio.sandspiel.club" target="_blank">
             {" "}
-            <b> SANDSPIEL STUDIO: Invent New Elements!</b>
+            <b> {text.studio}</b>
           </a>
           <br></br>
           <a href="https://orb.farm" target="_blank">
@@ -206,19 +210,19 @@ class Browse extends React.Component {
           </a>
         </p>
         <NavLink exact to="/browse/">
-          <button>New</button>
+          <button>{text.new}</button>
         </NavLink>
         <NavLink to="/browse/top/day/">
-          <button>Day</button>
+          <button>{text.day}</button>
         </NavLink>
         <NavLink to="/browse/top/week/">
-          <button>Week</button>
+          <button>{text.week}</button>
         </NavLink>
         <NavLink to="/browse/top/month/">
-          <button>Month</button>
+          <button>{text.month}</button>
         </NavLink>
         <NavLink exact to="/browse/top/">
-          <button>Year </button>
+          <button>{text.year}</button>
         </NavLink>
         <span style={{ display: "inline-block" }}>
           <input
@@ -228,7 +232,7 @@ class Browse extends React.Component {
               e.keyCode == 13 && // I think that's enter
               this.props.history.push(`/browse/search/?title=${search}`)
             }
-            placeholder="search"
+            placeholder={text.searchPlaceholder}
           />
           {search && (
             <NavLink
@@ -237,7 +241,7 @@ class Browse extends React.Component {
                 search: `?title=${search}`,
               }}
             >
-              <button>Search</button>
+              <button>{text.search}</button>
             </NavLink>
           )}
         </span>

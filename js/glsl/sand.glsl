@@ -159,6 +159,18 @@ void main() {
     hue = 0.94;
     saturation = 0.55;
     lightness = 0.48 + data.g * 0.18;
+  } else if (type == 27) { // wet sand
+    hue = 0.1;
+    saturation = 0.38;
+    lightness = 0.34 + data.g * 0.16;
+  } else if (type == 28) { // salt water
+    hue = 0.58;
+    saturation = 0.22;
+    lightness = 0.62 + data.g * 0.16 + noise * 0.03;
+  } else if (type == 29) { // salt
+    hue = 0.0;
+    saturation = 0.02;
+    lightness = 0.86 + data.g * 0.1;
   }
   if (isSnapshot == false) {
     lightness *= (0.975 + snoise2(floor(uv * resolution / dpi)) * 0.025);

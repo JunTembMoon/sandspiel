@@ -6,6 +6,12 @@ import timeago from "timeago.js";
 import HyperText from "./hypertext.js";
 import SignInScreen from "./signin";
 import { functions, storage } from "../api.js";
+import {
+  ADMIN_TEXT,
+  formatRelativeTime,
+  getText,
+  interpolate,
+} from "../i18n";
 
 let n = 0;
 const ago = timeago();
@@ -24,14 +30,13 @@ class Submissions extends React.Component {
   }
   render() {
     let { submissions, voteFromBrowse, browseVotes, judge, banIP } = this.props;
+    const text = getText(ADMIN_TEXT);
 
     if (!submissions) {
-      return <div style={{ height: "90vh" }}>Loading Submissions...</div>;
+      return <div style={{ height: "90vh" }}>{text.loading}</div>;
     }
     if (submissions.length == 0) {
-      return (
-        <div style={{ height: "90vh" }}>No actionable reports! Thanks ♡♡♡</div>
-      );
+      return <div style={{ height: "90vh" }}>{text.empty}</div>;
     }
 
     return (
@@ -39,13 +44,13 @@ class Submissions extends React.Component {
         {submissions.map((submission) => {
           let displayTime = new Date(
             submission.data.timestamp
-          ).toLocaleDateString();
+          ).toLocaleDateString(window.appLanguage || "en");
           let msAgo =
             new Date().getTime() -
             new Date(submission.data.timestamp).getTime();
 
           if (msAgo < 24 * 60 * 60 * 1000) {
-            displayTime = ago.format(submission.data.timestamp);
+            displayTime = formatRelativeTime(submission.data.timestamp);
           }
           return (
             <div key={submission.id} className="submission">
@@ -94,36 +99,36 @@ class Submissions extends React.Component {
 
                 <h4>{displayTime}</h4>
                 <h3 style={{ flexGrow: 1 }}>
-                  {submission.data.reports} reports
+                  {submission.data.reports} {text.reportsSuffix}
                 </h3>
                 <div className="adminButtons">
                   <button
                     className="IPBAN"
-                    title="ban IP and user"
+                    title={text.banIpTitle}
                     onClick={() => banIP(submission.id)}
                   >
-                    IP
+                    {text.ipShort}
                   </button>
                   <button
                     className="BAN"
-                    title="ban user"
+                    title={text.banUserTitle}
                     onClick={() => judge(submission.id, 2)}
                   >
-                    ban 
+                    {text.ban}
                   </button>
                   <button
                     className="delete"
-                    title="delete"
+                    title={text.deleteTitle}
                     onClick={() => judge(submission.id, true)}
                   >
-                    delete
+                    {text.delete}
                   </button>
                   <button
                     className="pardon"
-                    title="pardon"
+                    title={text.pardonTitle}
                     onClick={() => judge(submission.id, false)}
                   >
-                    pardon
+                    {text.pardon}
                   </button>
                 </div>
               </div>
@@ -231,7 +236,8 @@ class AdminBrowse extends React.Component {
       });
   }
   banIP(id) {
-    if (!confirm("Ban this IP address? This will ban ALL content from this IP.")) {
+    const text = getText(ADMIN_TEXT);
+    if (!confirm(text.confirmBanIp)) {
       return;
     }
     this.setState(({ decidedIds }) => ({
@@ -251,7 +257,12 @@ class AdminBrowse extends React.Component {
           .then((res) => res.json())
           .then((data) => {
             console.log("IP ban result:", data);
-            alert(`Successfully banned IP ${data.ip}. Removed ${data.banned_count} creations.`);
+            alert(
+              interpolate(text.banIpSuccess, {
+                ip: data.ip,
+                count: data.banned_count,
+              })
+            );
             n++;
             if (n > 20) {
               this.loadSubmissions();
@@ -260,7 +271,7 @@ class AdminBrowse extends React.Component {
           })
           .catch((e) => {
             console.error(e);
-            alert("Error banning IP");
+            alert(text.banIpError);
           });
       });
   }
@@ -270,6 +281,7 @@ class AdminBrowse extends React.Component {
   }
   render() {
     let { submissions, browseVotes, currentUser, decidedIds } = this.state;
+    const text = getText(ADMIN_TEXT);
 
     submissions =
       submissions &&
@@ -277,11 +289,11 @@ class AdminBrowse extends React.Component {
     return (
       <React.Fragment>
         <SignInScreen />
-        <h2 style={{ display: "inline-block" }}>do it for doona </h2>
+        <h2 style={{ display: "inline-block" }}>{text.title} </h2>
 
-        {submissions && <h3>{submissions.length} actionable reports:</h3>}
+        {submissions && <h3>{submissions.length} {text.actionable}:</h3>}
         <NavLink to="/browse/">
-          <button>Browse new</button>
+          <button>{text.browseNew}</button>
         </NavLink>
         <Submissions
           submissions={submissions}

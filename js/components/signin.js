@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 
 import FirebaseAuth from "react-firebaseui/FirebaseAuth";
+import { SIGNIN_TEXT, getText, interpolate } from "../i18n";
 
 class SignInScreen extends React.Component {
   // The component's Local state.
@@ -58,16 +59,17 @@ class SignInScreen extends React.Component {
   }
 
   render() {
+    const text = getText(SIGNIN_TEXT);
     if (!this.state.isSignedIn) {
       if (!this.state.expanded) {
         return (
           <span>
             <p>
-              Please{" "}
+              {text.please}{" "}
               <button onClick={() => this.setState({ expanded: true })}>
-                Sign in
+                {text.signIn}
               </button>{" "}
-              to vote!{" "}
+              {text.toVote}{" "}
             </p>
             <span style={{ display: "none" }}>
               {/* gross hack for completing login */}
@@ -81,7 +83,7 @@ class SignInScreen extends React.Component {
       } else {
         return (
           <>
-            Sign-in to post and to vote!
+            {text.signInPrompt}
             <FirebaseAuth
               uiConfig={this.uiConfig}
               firebaseAuth={firebase.auth()}
@@ -102,19 +104,19 @@ class SignInScreen extends React.Component {
               search: `?user=${currentUser.uid}`,
             }}
           >
-            [Post History]
+            {text.postHistory}
           </NavLink>
           {!currentUser.emailVerified &&
-            `Please Verify your email ${currentUser.email} to vote!`}
+            interpolate(text.verifyEmail, { email: currentUser.email })}
           <button
             style={{ flexGrow: 0, margin: "0 10px" }}
             onClick={() => {
-              if (window.confirm("Sign out?")) {
+              if (window.confirm(text.signOutConfirm)) {
                 firebase.auth().signOut();
               }
             }}
           >
-            Sign-out
+            {text.signOut}
           </button>
         </div>
       </div>

@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import HyperText from "./hypertext.js";
 import classnames from "classnames";
-import { ago, storageUrl } from "./browse";
+import { storageUrl } from "./browse";
 import { functions } from "../api.js";
+import { POST_TEXT, formatRelativeTime, getText } from "../i18n";
 
 export function Post({
   submission,
@@ -15,12 +16,15 @@ export function Post({
 }) {
   let [nextPost, setNextPost] = useState(null);
   let [childrenPosts, setChildrenPosts] = useState(null);
-  let displayTime = new Date(submission.data.timestamp).toLocaleDateString();
+  const text = getText(POST_TEXT);
+  let displayTime = new Date(submission.data.timestamp).toLocaleDateString(
+    window.appLanguage || "en"
+  );
   let msAgo =
     new Date().getTime() - new Date(submission.data.timestamp).getTime();
 
   if (msAgo < 24 * 60 * 60 * 1000) {
-    displayTime = ago.format(submission.data.timestamp);
+    displayTime = formatRelativeTime(submission.data.timestamp);
   }
 
   function fetchParent() {
@@ -91,7 +95,7 @@ export function Post({
         <div style={{ width: "50%" }}>
           {hasParent && !redundent_parent_id && (
             <button
-              title="parent post"
+              title={text.parentPost}
               className={classnames("parent", { active: nextPost })}
               onClick={fetchParent}
             >
@@ -124,7 +128,7 @@ export function Post({
 
           <button
             className="report"
-            title="report"
+            title={text.report}
             onClick={() => report(submission.id)}
           >
             !
@@ -132,7 +136,7 @@ export function Post({
           {submission.data.children > (redundent_child_id ? 1 : 0) && (
             <button
               className={classnames("children", { active: childrenPosts })}
-              title="show children"
+              title={text.showChildren}
               onClick={fetchChildren}
             >
               {submission.data.children}↓

@@ -383,10 +383,13 @@ impl Universe {
             Species::Lava => 60,
             Species::Ice => 60,
             Species::Slime => 55,
+            Species::WetSand => 50,
 
             Species::Fungus => 54,
 
             Species::Oil => 50,
+            Species::SaltWater => 48,
+            Species::Salt => 28,
             Species::Steam => 8,
             Species::Nitro => 35,
 
@@ -433,10 +436,12 @@ impl Universe {
                 && api.get(dx, -2).species == Species::Empty
                 && (cell.species == Species::Sand
                     || cell.species == Species::Water
+                    || cell.species == Species::SaltWater
                     || cell.species == Species::Lava
                     || cell.species == Species::Acid
                     || cell.species == Species::Mite
                     || cell.species == Species::Dust
+                    || cell.species == Species::Salt
                     || cell.species == Species::Oil
                     || cell.species == Species::Rocket)
             {

@@ -27,6 +27,7 @@ import {} from "./paint";
 import {} from "./app";
 import { startFluid } from "./fluid";
 import {} from "./layout";
+import { applyLanguageToDocument } from "./i18n";
 
 const isBench = window.location.pathname === "/bench";
 if (window.safari) {
@@ -81,6 +82,7 @@ if ("serviceWorker" in navigator) {
 let n = 300;
 window.maxFps = Number(localStorage.getItem("maxFps") || 60);
 window.appLanguage = localStorage.getItem("language") || "en";
+applyLanguageToDocument(window.appLanguage);
 const universe = isBench ? window.u : Universe.new(n, n);
 
 let width = n;
